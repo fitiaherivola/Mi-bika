@@ -17,6 +17,25 @@ def get_meteo_du_jour(ville: str) -> Meteo | None:
     ).first()
 
 
+def get_derniere_meteo(ville: str) -> Meteo | None:
+    """Dernière entrée en base pour une ville (même si date ≠ aujourd'hui)."""
+    return Meteo.objects.filter(ville__iexact=ville).order_by('-date_prediction').first()
+
+
+def meteo_fallback_dict(ville: str) -> dict:
+    """Valeurs par défaut pour Antananarivo / Madagascar — réponse instantanée."""
+    return {
+        'id': None,
+        'ville': ville,
+        'temperature': 24.0,
+        'condition': 'ensoleille',
+        'date_prediction': date.today().isoformat(),
+        'saison_estimee': 'ETE',
+        'source': 'defaut',
+        'message': 'Estimation locale (synchronisez plus tard si besoin)',
+    }
+
+
 def get_meteo_par_ville(ville: str, jours: int = 7) -> list:
     """
     Retourne l'historique météo d'une ville sur N jours.

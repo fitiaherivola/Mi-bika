@@ -128,47 +128,38 @@ def calculer_score_baseline(haut: Vetement, bas: Vetement,
 # ─────────────────────────────────────────
 
 def generer_tenues_baseline(utilisateur, saison=None, style=None,
-                             humeur=None, top_k=5) -> list:
+                             humeur=None, top_k=5,
+                             ids_exclus: list = None) -> list:
     """
     Génère les top_k meilleures tenues pour un utilisateur.
 
     ALGORITHME BASELINE :
-      1. Récupère tous les hauts et bas propres de l'utilisateur
-      2. Calcule le score de chaque combinaison haut × bas
-      3. Maintient un tas binaire min de taille k pour garder les top-k
-         sans trier toute la liste
-
-    Structure : Tas binaire min (heapq Python)
-    Complexité : O(n² log k) où n = nb vêtements, k = top_k
-    Mémoire    : O(k) — on ne garde que k tenues en mémoire
-
+      ...
     Args:
-        utilisateur : instance Utilisateur
-        saison      : filtre optionnel ('ETE', 'HIVER'...)
-        style       : filtre optionnel ('CASUAL', 'FORMEL'...)
-        humeur      : non utilisé en baseline (réservé pour optimisé)
-        top_k       : nombre de tenues à retourner
+        ids_exclus: liste d'IDs de vêtements à exclure (anti-répétition)
 
-    Returns:
-        Liste de dicts triés par score décroissant
+    Complexité : O(n² log k)
     """
+    ids_exclus = set(ids_exclus or [])
 
-    # ── Récupération des vêtements ──────────────────────────────
+    # ── Récupération des vêtements ──────────────────────────────────
     hauts_qs = Vetement.objects.filter(
         utilisateur=utilisateur,
         categorie='HAUT',
         est_propre=True
-    )
+    ).exclude(id__in=ids_exclus)
+
     bas_qs = Vetement.objects.filter(
         utilisateur=utilisateur,
         categorie='BAS',
         est_propre=True
-    )
+    ).exclude(id__in=ids_exclus)
+
     accessoires_qs = Vetement.objects.filter(
         utilisateur=utilisateur,
         categorie='ACCESSOIRE',
         est_propre=True
-    )
+    ).exclude(id__in=ids_exclus)
 
     # Filtres optionnels
     if saison:
@@ -180,42 +171,40 @@ def generer_tenues_baseline(utilisateur, saison=None, style=None,
 
     hauts       = list(hauts_qs)
     bas_list    = list(bas_qs)
-    accessoires = list(accessoires_qs) + [None]  
+    accessoires = list(accessoires_qs) + [None]
 
     if not hauts or not bas_list:
-        return []  # garde-robe insuffisante
+        return []
 
-   
-    tas = []
-
+    # ── Génération avec unique pairs ─────────────────────────────────
+    all_combos = []
     for haut in hauts:
         for bas in bas_list:
             for acc in accessoires:
                 score = calculer_score_baseline(haut, bas, acc)
+                all_combos.append({
+                    'haut':          haut,
+                    'bas':           bas,
+                    'accessoire':    acc,
+                    'score_harmonie': score,
+                    'algorithme':    'baseline',
+                })
 
-                if len(tas) < top_k:
-                    heapq.heappush(tas, (score, haut.id, bas.id,
-                                         acc.id if acc else None,
-                                         haut, bas, acc))
-                elif score > tas[0][0]:
-                    # Remplace le moins bon si on trouve mieux
-                    heapq.heapreplace(tas, (score, haut.id, bas.id,
-                                             acc.id if acc else None,
-                                             haut, bas, acc))
+    # Trier par score décroissant
+    all_combos.sort(key=lambda x: x['score_harmonie'], reverse=True)
 
-    # ── Tri final décroissant ────────────────────────────────────
-    resultats = sorted(tas, key=lambda x: x[0], reverse=True)
+    # Sélectionner les top_k tenues avec (haut, bas) uniques
+    resultats = []
+    seen_pairs = set()
+    for combo in all_combos:
+        pair = (combo['haut'].id, combo['bas'].id)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            resultats.append(combo)
+            if len(resultats) >= top_k:
+                break
 
-    return [
-        {
-            'haut':          r[4],
-            'bas':           r[5],
-            'accessoire':    r[6],
-            'score_harmonie': r[0],
-            'algorithme':    'baseline',
-        }
-        for r in resultats
-    ]
+    return resultats
 
 
 # ─────────────────────────────────────────
@@ -224,14 +213,16 @@ def generer_tenues_baseline(utilisateur, saison=None, style=None,
 
 def sauvegarder_tenue(utilisateur, haut: Vetement, bas: Vetement,
                        accessoire: Vetement = None,
-                       score: int = 0) -> Tenue:
-    
+                       score: int = 0,
+                       algorithme: str = '') -> Tenue:
+
     tenue = Tenue.objects.create(
         utilisateur=utilisateur,
         haut=haut,
         bas=bas,
         accessoire=accessoire,
-        score_harmonie=score
+        score_harmonie=score,
+        algorithme=algorithme or '',
     )
     return tenue
 
@@ -241,10 +232,14 @@ def sauvegarder_tenue(utilisateur, haut: Vetement, bas: Vetement,
 # ─────────────────────────────────────────
 
 def generer_et_sauvegarder_baseline(utilisateur, saison=None,
-                                     style=None, top_k=5) -> list:
+                                     style=None, top_k=5,
+                                     ids_exclus: list = None) -> list:
     """
     Génère et sauvegarde les top_k tenues en base.
     Point d'entrée appelé depuis views.py.
+
+    Args:
+        ids_exclus: liste d'IDs de vêtements à exclure (anti-répétition)
 
     Returns:
         Liste des instances Tenue sauvegardées
@@ -253,7 +248,8 @@ def generer_et_sauvegarder_baseline(utilisateur, saison=None,
         utilisateur=utilisateur,
         saison=saison,
         style=style,
-        top_k=top_k
+        top_k=top_k,
+        ids_exclus=ids_exclus,
     )
 
     tenues_sauvegardees = []
@@ -263,7 +259,8 @@ def generer_et_sauvegarder_baseline(utilisateur, saison=None,
             haut=s['haut'],
             bas=s['bas'],
             accessoire=s['accessoire'],
-            score=s['score_harmonie']
+            score=s['score_harmonie'],
+            algorithme=s.get('algorithme', 'baseline'),
         )
         tenues_sauvegardees.append(tenue)
 

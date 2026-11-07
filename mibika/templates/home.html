@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+    <h2>{% trans "Welcome to Mi-bika" %}</h2>
+    <p>{% trans "Your intelligent wardrobe assistant" %}</p>
+
+    <section class="features">
+        <h3>{% trans "API REST" %}</h3>
+        <ul>
+            <li><code>/api/users/login/</code> — {% trans "Auth JWT + token" %}</li>
+            <li><code>/api/wardrobe/</code> — {% trans "Garde-robe" %}</li>
+            <li><code>/api/wardrobe/palette/</code> — {% trans "Palette couleurs" %}</li>
+            <li><code>/api/outfits/generer/baseline/</code> — {% trans "Génération tenues" %}</li>
+            <li><code>/api/outfits/generer/dijkstra/</code> — Dijkstra</li>
+            <li><code>/api/outfits/generer/backtracking/</code> — Backtracking</li>
+            <li><code>/api/outfits/recommander/mlp/</code> — MLP</li>
+            <li><code>/api/sync/offline/</code> — {% trans "Mode hors-ligne" %}</li>
+            <li><code>/api/trends/dashboard/</code> — {% trans "Tendances" %}</li>
+        </ul>
+    </section>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/offline.js' %}"></script>
+{% endblock %}

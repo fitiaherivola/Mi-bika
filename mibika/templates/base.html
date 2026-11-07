@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:"fr-fr" }}">
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}Mi-bika{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% load static i18n %}
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+</head>
+<body>
+    <header>
+        <div class="language-selector">
+            <form action="{% url 'set_language' %}" method="post">
+                {% csrf_token %}
+                <input name="next" type="hidden" value="{{ redirect_url|default:'/' }}">
+                <select name="language">
+                    {% get_available_languages as LANGUAGES %}
+                    {% for code, name in LANGUAGES %}
+                        <option value="{{ code }}" {% if code == LANGUAGE_CODE %}selected{% endif %}>
+                            {{ name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit">{% trans "Change language" %}</button>
+            </form>
+        </div>
+        <h1>{% block header_title %}Mi-bika{% endblock %}</h1>
+    </header>
+
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; {% now "YEAR %} Mi-bika. {% trans "All rights reserved." %}</p>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

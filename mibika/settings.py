@@ -1,12 +1,17 @@
+import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-q8n#9k_l5v@2m3p&8x-9z$0a!1b@2c#3d$4e%5f^6g&7h*8i(9j)0k-1l_2m+3n'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-q8n#9k_l5v@2m3p&8x-9z$0a!1b@2c#3d$4e%5f^6g&7h*8i(9j)0k-1l_2m+3n',
+)
 
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*.localhost']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*.localhost', '0.0.0.0', 'testserver']
 
 
 # ─────────────────────────────────────────
@@ -23,21 +28,26 @@ INSTALLED_APPS = [
 
     # Third party
     'rest_framework',
-    'rest_framework.authtoken',  # ← AJOUTÉ
+    'rest_framework.authtoken',
+    'corsheaders',
 
-    # Nos apps Mi-bika
-    'users',
-    'wardrobe',
-    'outfits',
-    'weather',
-    'events',
-    'trends',
-    'ratings',
+# Nos apps Mi-bika
+     'users',
+     'wardrobe',
+     'outfits',
+     'weather',
+     'events',
+     'trends',
+     'ratings',
+     'feedback',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -72,13 +82,23 @@ WSGI_APPLICATION = 'mibika.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'Mi-bika',
-        'USER': 'esn_user',
-        'PASSWORD': '123mibika',
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_NAME', 'Mi-bika'),
+        'USER': os.environ.get('DB_USER', 'esn_user'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', '123mibika'),
+        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
+
+# Override database for testing if needed
+import sys
+if 'test' in sys.argv or 'test_coverage' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+    }
 
 
 # ─────────────────────────────────────────
@@ -94,18 +114,30 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# Mots de passe chiffrés avec bcrypt (cahier des charges §10)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+]
+
+JWT_ACCESS_MINUTES = int(os.environ.get('JWT_ACCESS_MINUTES', '60'))
+JWT_REFRESH_DAYS = int(os.environ.get('JWT_REFRESH_DAYS', '7'))
+
 # ─────────────────────────────────────────
 #  DJANGO REST FRAMEWORK — AJOUTÉ
 # ─────────────────────────────────────────
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'users.authentication.JWTAuthentication',
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 
@@ -118,12 +150,46 @@ TIME_ZONE     = 'Indian/Antananarivo'  # ← CORRIGÉ pour Madagascar
 USE_I18N      = True
 USE_TZ        = True
 
+# Langues supportées : Français et Malgache
+LANGUAGES = [
+    ('fr', 'Français'),
+    ('mg', 'Malagasy'),
+]
+
+# Répertoire des fichiers de traduction
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
+
 
 # ─────────────────────────────────────────
 #  FICHIERS STATIQUES
 # ─────────────────────────────────────────
 
-STATIC_URL    = 'static/'
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic output (production)
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# ─────────────────────────────────────────
+#  APIS EXTERNES
+# ─────────────────────────────────────────
+
+# Open-Meteo — météo open-source, sans clé API
+OPENMETEO_FORECAST_URL = os.environ.get(
+    'OPENMETEO_FORECAST_URL', 'https://api.open-meteo.com/v1/forecast'
+)
+OPENMETEO_GEOCODING_URL = os.environ.get(
+    'OPENMETEO_GEOCODING_URL', 'https://geocoding-api.open-meteo.com/v1/search'
+)
+
+# Firebase Cloud Messaging (notifications push — BF9)
+FCM_SERVER_KEY = os.environ.get('FCM_SERVER_KEY', '')
+
+# CORS — frontend Vue.js (Vite dev + production)
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173',
+]
+CORS_ALLOW_CREDENTIALS = True

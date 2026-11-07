@@ -14,6 +14,12 @@ class Tenue(models.Model):
                           default=0,
                           help_text="Score de 0 à 100"
                       )
+    algorithme      = models.CharField(
+                          max_length=32,
+                          blank=True,
+                          default='',
+                          help_text="Algorithme ayant généré la tenue (baseline, optimise, dijkstra, …)",
+                      )
     haut            = models.ForeignKey(
                           Vetement,
                           null=True,
@@ -51,9 +57,10 @@ class Tenue(models.Model):
         verbose_name_plural = 'Tenues'
         constraints = [
             models.CheckConstraint(
-                check=models.Q(score_harmonie__gte=0) & models.Q(score_harmonie__lte=100),
+                condition=models.Q(score_harmonie__gte=0) & models.Q(score_harmonie__lte=100),
                 name='tenue_score_harmonie_check'
-            )
+)
+
         ]
 
     def __str__(self):

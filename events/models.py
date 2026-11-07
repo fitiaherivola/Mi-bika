@@ -22,8 +22,24 @@ class Calendrier(models.Model):
 
 
 class Evenement(models.Model):
+
+    class TypeEvenement(models.TextChoices):
+        MARIAGE       = 'MARIAGE',       'Mariage'
+        SOIREE        = 'SOIREE',        'Soirée'
+        PROFESSIONNEL = 'PROFESSIONNEL', 'Professionnel'
+        SPORT         = 'SPORT',         'Sport'
+        TRADITIONNEL  = 'TRADITIONNEL',  'Traditionnel / cérémonie'
+        CASUAL        = 'CASUAL',        'Décontracté'
+        AUTRE         = 'AUTRE',         'Autre'
+
     nom_evt        = models.CharField(max_length=100, null=True, blank=True,
                                       db_column='nom_evt')
+    type_evt       = models.CharField(
+                         max_length=20,
+                         choices=TypeEvenement.choices,
+                         default=TypeEvenement.AUTRE,
+                         db_column='type_evt',
+                     )
     date_evt       = models.DateTimeField(null=True, blank=True,
                                           db_column='date_evt')
     lieu           = models.CharField(max_length=100, null=True, blank=True)
@@ -60,28 +76,45 @@ class Evenement(models.Model):
 
 
 class Notification(models.Model):
-    contenu     = models.TextField()
-    date_envoi  = models.DateTimeField(auto_now_add=True)
-    est_lue     = models.BooleanField(default=False)
-    evenement   = models.ForeignKey(
-                      Evenement,
-                      null=True,
-                      blank=True,
-                      on_delete=models.CASCADE,
-                      related_name='notifications',
-                      db_column='id_evt'
-                  )
-    utilisateur = models.ForeignKey(
-                      Utilisateur,
-                      on_delete=models.CASCADE,
-                      related_name='notifications',
-                      db_column='id_user'
-                  )
+    """
+    Modèle pour les notifications intelligentes.
+    Peut être liée à un événement (rappel avant événement)
+    ou autonome (alerte météo, changement important).
+    """
 
-    def __str__(self):
-        return f"Notification {self.id}"
+    class TypeNotification(models.TextChoices):
+        EVENEMENT       = 'EVENEMENT',       'Rappel événement'
+        METEO           = 'METEO',           'Alerte météo'
+        TENUE_SUGGEREE  = 'TENUE_SUGGEREE',  'Suggestion de tenue'
+        GENERAL         = 'GENERAL',         'Information générale'
+
+    contenu         = models.TextField()
+    type_notif      = models.CharField(
+        max_length=20,
+        choices=TypeNotification.choices,
+        default=TypeNotification.GENERAL
+    )
+    date_envoi      = models.DateTimeField(auto_now_add=True)
+    est_lue         = models.BooleanField(default=False)
+    evenement       = models.ForeignKey(
+                          Evenement,
+                          null=True,
+                          blank=True,
+                          on_delete=models.CASCADE,
+                          related_name='notifications',
+                          db_column='id_evt'
+                      )
+    utilisateur     = models.ForeignKey(
+                          Utilisateur,
+                          on_delete=models.CASCADE,
+                          related_name='notifications',
+                          db_column='id_user'
+                      )
 
     class Meta:
-        db_table     = 'notification'
+        db_table = 'notification'
         verbose_name = 'Notification'
-        verbose_name_plural = 'Notifications'
+        ordering = ['-date_envoi']
+
+    def __str__(self):
+        return f"[{self.get_type_notif_display()}] {self.utilisateur.username} - {self.date_envoi.strftime('%d/%m %H:%M')}"

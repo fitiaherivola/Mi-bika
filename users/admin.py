@@ -1,10 +1,17 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
 from .models import Utilisateur
 
 
 @admin.register(Utilisateur)
-class UtilisateurAdmin(admin.ModelAdmin):
+class UtilisateurAdmin(UserAdmin):
+    list_display = ('username', 'email', 'style_prefere', 'morphologie', 'is_staff')
+    list_filter  = ('style_prefere', 'morphologie', 'teint_avatar', 'is_staff')
+    search_fields = ('username', 'email')
 
-    list_display  = ('pseudo', 'style_prefere', 'morphologie', 'teint_avatar')
-    list_filter   = ('style_prefere', 'morphologie')
-    search_fields = ('pseudo',)
+    # Ajoute tes champs perso dans le formulaire admin
+    fieldsets = UserAdmin.fieldsets + (
+        ('Profil Mi-bika', {
+            'fields': ('style_prefere', 'teint_avatar', 'morphologie')
+        }),
+    )

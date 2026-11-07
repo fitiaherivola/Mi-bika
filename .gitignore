@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.log
+
+# Django
+db.sqlite3
+staticfiles/
+media/
+
+# Environnement
+.env
+.venv/
+venv/
+env/
+
+# Tests
+.pytest_cache/
+.coverage

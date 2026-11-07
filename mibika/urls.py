@@ -16,19 +16,20 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.views.i18n import set_language
+from mibika.views import home, OfflineSyncView
 
 urlpatterns = [
+    path('', home, name='home'),
     path('admin/', admin.site.urls),
-    
-    # API endpoints
-    path('api/', include([
-        path('users/', include('users.urls')),
-        path('wardrobe/', include('wardrobe.urls')),
-        path('outfits/', include('outfits.urls')),
-        path('weather/', include('weather.urls')),
-        path('events/', include('events.urls')),
-        path('trends/', include('trends.urls')),
-        path('ratings/', include('ratings.urls')),
-    ])),
+    path('i18n/', set_language, name='set_language'),
+    path('api/sync/offline/', OfflineSyncView.as_view()),
+    path('api/users/', include('users.urls')),
+    path('api/wardrobe/', include('wardrobe.urls')),
+    path('api/outfits/', include('outfits.urls')),
+    path('api/weather/', include('weather.urls')),
+    path('api/events/', include('events.urls')),
+    path('api/trends/', include('trends.urls')),
+    path('api/ratings/', include('ratings.urls')),
+    path('api/feedback/', include('feedback.urls')),
 ]

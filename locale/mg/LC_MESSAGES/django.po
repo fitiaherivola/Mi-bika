@@ -1,0 +1,41 @@
+# Traductions malgaches - Mi-bika
+msgid ""
+msgstr ""
+"Language: mg\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Welcome to Mi-bika"
+msgstr "Tongasoa eto amin'ny Mi-bika"
+
+msgid "Your intelligent wardrobe assistant"
+msgstr "Mpanampy fitafiana marani-tsaina"
+
+msgid "Change language"
+msgstr "Hanova fiteny"
+
+msgid "All rights reserved."
+msgstr "Zo rehetra voatokana."
+
+msgid "API REST"
+msgstr "API REST"
+
+msgid "Auth JWT + token"
+msgstr "JWT sy token"
+
+msgid "Garde-robe"
+msgstr "Fitafiana"
+
+msgid "Palette couleurs"
+msgstr "Lokanga"
+
+msgid "Génération tenues"
+msgstr "Famoronana fitafiana"
+
+msgid "Mode hors-ligne"
+msgstr "Anaty aterineto"
+
+msgid "Tendances"
+msgstr "Fironana"
+
+msgid "Mi-bika"
+msgstr "Mi-bika"

@@ -1,7 +1,12 @@
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
 
-class Utilisateur(models.Model):
+class Utilisateur(AbstractUser):
+
+    # ─────────────────────────────────────────
+    #  ENUMS (TextChoices)
+    # ─────────────────────────────────────────
 
     class StylePrefere(models.TextChoices):
         CASUAL       = 'CASUAL',       'Casual'
@@ -10,6 +15,10 @@ class Utilisateur(models.Model):
         TRADITIONNEL = 'TRADITIONNEL', 'Traditionnel'
         SOIREE       = 'SOIREE',       'Soirée'
         BOHEME       = 'BOHEME',       'Bohème'
+        RETRO        = 'RETRO',        'Rétro / Vintage'
+        GRUNGE       = 'GRUNGE',       'Grunge'
+        CHIC         = 'CHIC',         'Chic'
+        STREETWEAR   = 'STREETWEAR',   'Streetwear'
 
     class Morphologie(models.TextChoices):
         SABLIER      = 'SABLIER',      'Sablier'
@@ -25,24 +34,40 @@ class Utilisateur(models.Model):
         FONCE      = 'FONCE',      'Foncé'
         TRES_FONCE = 'TRES_FONCE', 'Très foncé'
 
-    pseudo        = models.CharField(max_length=50, unique=True)
+    # ─────────────────────────────────────────
+    #  CHAMPS PERSO Mi-bika
+    # ─────────────────────────────────────────
+    # ⚠️ Pas de champ `pseudo` : AbstractUser fournit déjà `username` (unique)
+
     style_prefere = models.CharField(
-                        max_length=20,
-                        choices=StylePrefere.choices,
-                        null=True,
-                        blank=True
-                    )
-    teint_avatar  = models.CharField(
-                        max_length=7,
-                        null=True,
-                        blank=True
-                    )
-    morphologie   = models.CharField(
-                        max_length=20,
-                        choices=Morphologie.choices,
-                        null=True,
-                        blank=True
-                    )
+        max_length=20,
+        choices=StylePrefere.choices,
+        null=True,
+        blank=True,
+    )
+
+    teint_avatar = models.CharField(
+        max_length=10,
+        choices=TeintAvatar.choices,
+        null=True,
+        blank=True,
+    )
+
+    morphologie = models.CharField(
+        max_length=20,
+        choices=Morphologie.choices,
+        null=True,
+        blank=True,
+    )
+
+    photo_profil = models.TextField(
+        null=True,
+        blank=True,
+    )
+
+    # ─────────────────────────────────────────
+    #  META
+    # ─────────────────────────────────────────
 
     class Meta:
         db_table            = 'utilisateur'
@@ -50,4 +75,4 @@ class Utilisateur(models.Model):
         verbose_name_plural = 'Utilisateurs'
 
     def __str__(self):
-        return self.pseudo
+        return self.username

@@ -5,6 +5,7 @@ from weather.views import (
     EnregistrerMeteoView,
     ContraintesMeteoView,
     StatsMeteoView,
+    SyncWeatherView,
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path('enregistrer/',  EnregistrerMeteoView.as_view()),
     path('contraintes/',  ContraintesMeteoView.as_view()),
     path('stats/',        StatsMeteoView.as_view()),
+    path('sync/',         SyncWeatherView.as_view()),   # ← Nouveau
 ]

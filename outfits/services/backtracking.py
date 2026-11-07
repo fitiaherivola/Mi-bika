@@ -156,19 +156,19 @@ class BacktrackingTenue:
                 'accessoire':  accessoire,
                 'complet':     True,
             })
-            return True  # on s'arrête à la première solution
+            return True 
 
-        # ── Étape HAUT ───────────────────────────────────────────
+     
         if etape == 'haut':
             for h in self.hauts:
-                # Élagage : si haut invalide → on skip tout le sous-arbre
+               
                 if not _toutes_contraintes(h, self.contraintes,
                                            self.ids_portes):
                     continue
-                # Haut valide → on descend vers le bas
+                
                 if self._backtrack(haut=h, etape='bas'):
-                    return True  # solution trouvée, on remonte
-            return False  # aucun haut valide
+                    return True 
+            return False  
 
         # ── Étape BAS ────────────────────────────────────────────
         if etape == 'bas':
@@ -176,11 +176,11 @@ class BacktrackingTenue:
                 if not _toutes_contraintes(b, self.contraintes,
                                            self.ids_portes):
                     continue
-                # Bas valide → on descend vers accessoire
+               
                 if self._backtrack(haut=haut, bas=b,
                                    etape='accessoire'):
                     return True
-            return False  # aucun bas valide pour ce haut → backtrack
+            return False  
 
         # ── Étape ACCESSOIRE ─────────────────────────────────────
         if etape == 'accessoire':

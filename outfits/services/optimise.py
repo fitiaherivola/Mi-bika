@@ -14,15 +14,21 @@ from outfits.services.base import (
 #  CONSTANTES OPTIMISATION
 # ─────────────────────────────────────────
 
-# Poids par humeur — influence le scoring final
-POIDS_HUMEUR = {
-    'heureuse':  {'couleur': 0.40, 'style': 0.35, 'saison': 0.25},
-    'triste':    {'couleur': 0.20, 'style': 0.50, 'saison': 0.30},
-    'enervee':   {'couleur': 0.30, 'style': 0.45, 'saison': 0.25},
-    'calme':     {'couleur': 0.35, 'style': 0.40, 'saison': 0.25},
-    'excitee':   {'couleur': 0.45, 'style': 0.30, 'saison': 0.25},
-    'neutre':    {'couleur': 0.33, 'style': 0.34, 'saison': 0.33},
+# Poids par état — influence le scoring final
+# On garde la clé 'etat' mais on maintient la compatibilité 'humeur'
+POIDS_ETAT = {
+    # États physiques
+    'malade':   {'couleur': 0.20, 'style': 0.55, 'saison': 0.25},
+    'fatigue':  {'couleur': 0.25, 'style': 0.50, 'saison': 0.25},
+    'forme':    {'couleur': 0.40, 'style': 0.35, 'saison': 0.25},
+    'stresse':  {'couleur': 0.25, 'style': 0.50, 'saison': 0.25},
+    'detendu':  {'couleur': 0.35, 'style': 0.40, 'saison': 0.25},
+    'festif':   {'couleur': 0.45, 'style': 0.30, 'saison': 0.25},
+    # État neutre (aucun état sélectionné)
+    'neutre':   {'couleur': 0.33, 'style': 0.34, 'saison': 0.33},
 }
+# Alias pour compatibilité backward
+POIDS_HUMEUR = POIDS_ETAT
 
 # Poids par condition météo
 POIDS_METEO = {
@@ -33,15 +39,32 @@ POIDS_METEO = {
     'froid':       {'ETE': 0.5,  'HIVER': 1.3, 'PRINTEMPS': 0.8, 'AUTOMNE': 1.1},
 }
 
-# Styles recommandés par humeur
-STYLE_PAR_HUMEUR = {
-    'heureuse':  ['CASUAL', 'SOIREE'],
-    'triste':    ['CASUAL', 'TRADITIONNEL'],
-    'enervee':   ['SPORT', 'CASUAL'],
-    'calme':     ['FORMEL', 'TRADITIONNEL'],
-    'excitee':   ['SOIREE', 'CASUAL'],
-    'neutre':    ['CASUAL', 'FORMEL', 'SPORT', 'TRADITIONNEL', 'SOIREE'],
+# ─────────────────────────────────────────
+#  LOGIQUE ÉTAT PHYSIQUE → SAISON FORCÉE
+# ─────────────────────────────────────────
+
+# Si malade → on force HIVER (vêtements chauds) quelle que soit la météo
+# Si fatigué → on force ETE (vêtements légers/confortables)
+SAISON_PAR_ETAT = {
+    'malade':  'HIVER',   # vêtements chauds, peu importe la météo
+    'fatigue': 'ETE',     # vêtements légers et confortables
+    'stresse': 'ETE',     # vêtements légers pour se détendre
 }
+
+# Styles recommandés par état
+STYLE_PAR_HUMEUR = {
+    # États physiques
+    'malade':  ['CASUAL'],                                     # confort max
+    'fatigue': ['CASUAL', 'SPORT'],                            # léger et relax
+    'forme':   ['SPORT', 'CASUAL', 'SOIREE'],                  # dynamique
+    'stresse': ['CASUAL', 'FORMEL'],                           # sobre et simple
+    'detendu': ['CASUAL', 'TRADITIONNEL', 'FORMEL'],           # décontracté
+    'festif':  ['SOIREE', 'CASUAL'],                           # festif
+    # Neutre = tout autorisé
+    'neutre':  ['CASUAL', 'FORMEL', 'SPORT', 'TRADITIONNEL', 'SOIREE'],
+}
+# Alias pour clarté
+STYLE_PAR_ETAT = STYLE_PAR_HUMEUR
 
 
 # ─────────────────────────────────────────
@@ -198,95 +221,180 @@ def calculer_score_optimise(haut: Vetement, bas: Vetement,
 # ─────────────────────────────────────────
 
 def generer_tenues_optimise(utilisateur, saison=None, style=None,
-                             humeur='neutre', condition_meteo=None,
-                             saison_actuelle=None, top_k=5) -> list:
+                             etat='neutre', condition_meteo=None,
+                             saison_actuelle=None, top_k=5,
+                             ids_exclus: list = None,
+                             styles_autorises: list = None,
+                             avec_accessoire: bool = True) -> list:
     """
     Génère les top_k meilleures tenues — ALGORITHME OPTIMISÉ.
 
-    Optimisations vs baseline :
-      1. Élagage précoce : on filtre les vêtements dont le style
-         ne correspond pas à l'humeur avant de calculer les scores
-         → réduit l'espace de recherche
+    Priorité de sélection des styles :
+      1. style_prefere de l'utilisateur (priorité absolue)
+      2. État physique du jour (malade → chaud, fatigué → léger)
+      3. Vêtements hors préférence (en complément)
 
-      2. Score optimisé : graphe couleurs + poids dynamiques humeur
-         + coefficient météo (plus précis que la baseline)
+    Logique état physique :
+      - malade  → force saison HIVER (chaud), peu importe météo
+      - fatigue → force saison ETE (léger et confortable)
 
-      3. Même structure tas binaire min O(n² log k) mais sur un
-         espace de recherche réduit → plus rapide en pratique
+    Args:
+        etat: état physique du jour ('malade', 'fatigue', 'neutre', ...)
+        ids_exclus: IDs à exclure (anti-répétition)
+        styles_autorises: liste de styles acceptés (si contrainte SANTE etc.)
+        avec_accessoire: inclure ou non les accessoires
 
     Complexité : O(m² log k) où m ≤ n (m = vêtements après élagage)
-    Mémoire    : O(k)
     """
+    ids_exclus = set(ids_exclus or [])
 
-    styles_ok = STYLE_PAR_HUMEUR.get(humeur, [])
+    # ── Saison forcée par état physique ───────────────────────────
+    # malade → HIVER (chaud), fatigue/stresse → ETE (léger)
+    # Cela SURPASSE la météo réelle
+    saison_effective = SAISON_PAR_ETAT.get(etat, saison)
 
-    # ── Récupération avec élagage précoce ───────────────────────
+    # ── Style de préférence de l'utilisateur (priorité 1) ────────
+    style_prefere = getattr(utilisateur, 'style_prefere', None)
+
+    # ── Styles selon état (priorité 2) ───────────────────────────
+    styles_par_etat = STYLE_PAR_ETAT.get(etat, STYLE_PAR_ETAT['neutre'])
+
+    # ── Construction de la liste ordonnée de styles ───────────────
+    # La logique : on génère d'abord avec le style_prefere, puis avec
+    # les styles de l'état, puis tous les styles (pour remplir top_k)
+    if styles_autorises is not None:
+        # Contrainte externe (ex: SANTE) → elle prime sur tout
+        styles_ok_pref = styles_autorises
+        styles_ok_all  = styles_autorises
+    else:
+        if style_prefere:
+            # Style préféré prend la priorité absolue dans la sélection
+            styles_ok_pref = [style_prefere]
+            # Ensuite les styles de l'état (sans dupliquer)
+            styles_ok_etat = [s for s in styles_par_etat if s != style_prefere]
+            # Enfin tous les autres styles de la garde-robe
+            tous_les_styles = ['CASUAL', 'FORMEL', 'SPORT', 'TRADITIONNEL', 'SOIREE']
+            styles_ok_all = (
+                styles_ok_pref
+                + styles_ok_etat
+                + [s for s in tous_les_styles
+                   if s not in styles_ok_pref and s not in styles_ok_etat]
+            )
+        else:
+            styles_ok_pref = styles_par_etat
+            styles_ok_all  = styles_par_etat
+
+    # ── Récupération avec élagage ──────────────────────────────────
     hauts_qs = Vetement.objects.filter(
         utilisateur=utilisateur,
         categorie='HAUT',
         est_propre=True
-    )
+    ).exclude(id__in=ids_exclus)
+
     bas_qs = Vetement.objects.filter(
         utilisateur=utilisateur,
         categorie='BAS',
         est_propre=True
-    )
+    ).exclude(id__in=ids_exclus)
+
     accessoires_qs = Vetement.objects.filter(
         utilisateur=utilisateur,
         categorie='ACCESSOIRE',
         est_propre=True
+    ).exclude(id__in=ids_exclus)
+
+    # Élagage par saison (effective = peut être forcée par état)
+    if saison_effective:
+        hauts_qs = hauts_qs.filter(saison__in=[saison_effective, 'TOUTES_SAISONS'])
+        bas_qs   = bas_qs.filter(saison__in=[saison_effective, 'TOUTES_SAISONS'])
+
+    # ── Phase 1 : style préféré uniquement ───────────────────────
+    hauts_pref = list(hauts_qs.filter(style__in=styles_ok_pref))
+    bas_pref   = list(bas_qs.filter(style__in=styles_ok_pref))
+
+    # ── Phase 2 : tous les styles (pour compléter si top_k non atteint) ─
+    hauts_all  = list(hauts_qs.filter(style__in=styles_ok_all))
+    bas_all    = list(bas_qs.filter(style__in=styles_ok_all))
+
+    accessoires = list(accessoires_qs) if avec_accessoire else []
+
+    # Style préféré (ex. TRADITIONNEL) sans pièces correspondantes → garde-robe en priorité
+    garde_robe_seule = (
+        style_prefere
+        and styles_autorises is None
+        and (not hauts_pref or not bas_pref)
     )
 
-    # Élagage par saison
-    if saison:
-        hauts_qs = hauts_qs.filter(saison__in=[saison, 'TOUTES_SAISONS'])
-        bas_qs   = bas_qs.filter(saison__in=[saison, 'TOUTES_SAISONS'])
+    # Si pas de vêtements selon le style préféré → on prend tout
+    hauts    = hauts_pref if hauts_pref else hauts_all
+    bas_list = bas_pref   if bas_pref   else bas_all
 
-    # Élagage par style adapté à l'humeur (optimisation clé)
-    if styles_ok and humeur != 'neutre':
-        hauts_qs = hauts_qs.filter(style__in=styles_ok)
-        bas_qs   = bas_qs.filter(style__in=styles_ok)
-
-    hauts       = list(hauts_qs)
-    bas_list    = list(bas_qs)
-    accessoires = list(accessoires_qs) + [None]
+    # Styles toujours filtrés
+    styles_ok = styles_ok_all
 
     if not hauts or not bas_list:
         return []
 
-    # ── Tas binaire min — top-k ──────────────────────────────────
-    tas = []
+    # Helper pour scorer les combinaisons
+    def _get_combinaisons_scorees(hauts_src, bas_src, style_source):
+        combos = []
+        for haut in hauts_src:
+            for bas in bas_src:
+                accs = accessoires + [None] if avec_accessoire else [None]
+                for acc in accs:
+                    score = calculer_score_optimise(
+                        haut, bas, acc,
+                        humeur=etat,
+                        condition_meteo=condition_meteo,
+                        saison_actuelle=saison_actuelle
+                    )
+                    combos.append({
+                        'haut': haut,
+                        'bas': bas,
+                        'accessoire': acc,
+                        'score_harmonie': score,
+                        'algorithme': 'optimise',
+                        'style_source': style_source,
+                    })
+        return combos
 
-    for haut in hauts:
-        for bas in bas_list:
-            for acc in accessoires:
-                score = calculer_score_optimise(
-                    haut, bas, acc,
-                    humeur=humeur,
-                    condition_meteo=condition_meteo,
-                    saison_actuelle=saison_actuelle
-                )
-                entree = (score, haut.id, bas.id,
-                          acc.id if acc else None,
-                          haut, bas, acc)
+    if garde_robe_seule:
+        hauts_gr = list(hauts_qs)
+        bas_gr   = list(bas_qs)
+        if not hauts_gr or not bas_gr:
+            return []
+        all_combos = _get_combinaisons_scorees(hauts_gr, bas_gr, 'garde_robe')
+        all_combos.sort(key=lambda x: x['score_harmonie'], reverse=True)
+    else:
+        hauts_used   = hauts_pref if hauts_pref else hauts
+        bas_used     = bas_pref   if bas_pref   else bas_list
+        hauts_autres = [h for h in hauts_all if h not in hauts_used]
+        bas_autres   = [b for b in bas_all   if b not in bas_used]
 
-                if len(tas) < top_k:
-                    heapq.heappush(tas, entree)
-                elif score > tas[0][0]:
-                    heapq.heapreplace(tas, entree)
+        pref_combos = _get_combinaisons_scorees(hauts_used, bas_used, 'preference')
+        pref_combos.sort(key=lambda x: x['score_harmonie'], reverse=True)
 
-    resultats = sorted(tas, key=lambda x: x[0], reverse=True)
+        autres_combos = []
+        if hauts_autres or bas_autres:
+            hauts_mix = hauts_autres if hauts_autres else hauts_used
+            bas_mix   = bas_autres   if bas_autres   else bas_used
+            autres_combos = _get_combinaisons_scorees(hauts_mix, bas_mix, 'garde_robe')
+            autres_combos.sort(key=lambda x: x['score_harmonie'], reverse=True)
 
-    return [
-        {
-            'haut':           r[4],
-            'bas':            r[5],
-            'accessoire':     r[6],
-            'score_harmonie': r[0],
-            'algorithme':     'optimise',
-        }
-        for r in resultats
-    ]
+        all_combos = pref_combos + autres_combos
+
+    # Sélectionner les top_k tenues avec (haut, bas) uniques
+    resultats = []
+    seen_pairs = set()
+    for combo in all_combos:
+        pair = (combo['haut'].id, combo['bas'].id)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            resultats.append(combo)
+            if len(resultats) >= top_k:
+                break
+
+    return resultats
 
 
 # ─────────────────────────────────────────
@@ -357,21 +465,37 @@ def comparer_algorithmes(utilisateur, saison=None, humeur='neutre',
 # ─────────────────────────────────────────
 
 def generer_et_sauvegarder_optimise(utilisateur, saison=None,
-                                     humeur='neutre',
+                                     etat='neutre',
                                      condition_meteo=None,
                                      saison_actuelle=None,
-                                     top_k=5) -> list:
+                                     top_k=5,
+                                     ids_exclus: list = None,
+                                     styles_autorises: list = None,
+                                     avec_accessoire: bool = True) -> list:
     """
     Génère et sauvegarde les top_k tenues optimisées.
     Point d'entrée appelé depuis views.py.
+
+    Priorité de génération :
+      1. Style préféré de l'utilisateur (style_prefere)
+      2. État physique du jour (malade → HIVER, fatigué → ETE)
+      3. Autres vêtements de la garde-robe (en complément)
+
+    Args:
+        etat: état physique ('malade', 'fatigue', 'neutre', ...)
+        styles_autorises: liste de styles acceptés (contrainte externe)
+        avec_accessoire: inclure les accessoires
     """
     suggestions = generer_tenues_optimise(
         utilisateur=utilisateur,
         saison=saison,
-        humeur=humeur,
+        etat=etat,
         condition_meteo=condition_meteo,
         saison_actuelle=saison_actuelle,
-        top_k=top_k
+        top_k=top_k,
+        ids_exclus=ids_exclus,
+        styles_autorises=styles_autorises,
+        avec_accessoire=avec_accessoire,
     )
 
     tenues_sauvegardees = []
@@ -381,7 +505,8 @@ def generer_et_sauvegarder_optimise(utilisateur, saison=None,
             haut=s['haut'],
             bas=s['bas'],
             accessoire=s['accessoire'],
-            score=int(s['score_harmonie'])
+            score=int(s['score_harmonie']),
+            algorithme=s.get('algorithme', 'optimise'),
         )
         tenues_sauvegardees.append(tenue)
 
